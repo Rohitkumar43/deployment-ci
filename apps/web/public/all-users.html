@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Users</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #users {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .user {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        #wsStatus {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>All Users</h1>
+    <p>This page displays all users from the database and allows you to create new users via WebSocket.</p>
+    
+    <div id="wsStatus" class="disconnected">WebSocket: Disconnected</div>
+    
+    <button id="connect">Connect to WebSocket</button>
+    <button id="disconnect">Disconnect</button>
+    <button id="refresh">Refresh Users</button>
+    
+    <h2>Users:</h2>
+    <div id="users">Loading users...</div>
+    
+    <script>
+        let socket = null;
+        
+        // Function to fetch all users
+        async function fetchUsers() {
+            try {
+                const response = await fetch('/api/users');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch users');
+                }
+                const users = await response.json();
+                displayUsers(users);
+            } catch (error) {
+                document.getElementById('users').innerHTML = `<p>Error fetching users: ${error.message}</p>`;
+            }
+        }
+        
+        // Function to display users
+        function displayUsers(users) {
+            const usersDiv = document.getElementById('users');
+            if (users.length === 0) {
+                usersDiv.innerHTML = '<p>No users found</p>';
+                return;
+            }
+            
+            let html = '';
+            users.forEach(user => {
+                html += `
+                    <div class="user">
+                        <p><strong>ID:</strong> ${user.id}</p>
+                        <p><strong>Username:</strong> ${user.username}</p>
+                        <p><strong>Password:</strong> ${user.password}</p>
+                    </div>
+                `;
+            });
+            
+            usersDiv.innerHTML = html;
+        }
+        
+        // Connect to WebSocket
+        document.getElementById('connect').addEventListener('click', function() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                alert('Already connected to WebSocket');
+                return;
+            }
+            
+            // Create WebSocket connection
+            socket = new WebSocket('ws://localhost:8081');
+            
+            // Connection opened
+            socket.addEventListener('open', function(event) {
+                document.getElementById('wsStatus').className = 'connected';
+                document.getElementById('wsStatus').textContent = 'WebSocket: Connected';
+            });
+            
+            // Listen for messages
+            socket.addEventListener('message', function(event) {
+                console.log('Received message:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.user) {
+                        alert(`New user created: ${data.user.username}`);
+                        fetchUsers(); // Refresh the user list
+                    }
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                }
+            });
+            
+            // Connection closed
+            socket.addEventListener('close', function(event) {
+                document.getElementById('wsStatus').className = 'disconnected';
+                document.getElementById('wsStatus').textContent = 'WebSocket: Disconnected';
+                socket = null;
+            });
+            
+            // Connection error
+            socket.addEventListener('error', function(event) {
+                document.getElementById('wsStatus').className = 'disconnected';
+                document.getElementById('wsStatus').textContent = `WebSocket: Error - ${event}`;
+            });
+        });
+        
+        // Disconnect from WebSocket
+        document.getElementById('disconnect').addEventListener('click', function() {
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+        });
+        
+        // Refresh users
+        document.getElementById('refresh').addEventListener('click', function() {
+            fetchUsers();
+        });
+        
+        // Initial fetch of users
+        fetchUsers();
+    </script>
+</body>
+</html>
